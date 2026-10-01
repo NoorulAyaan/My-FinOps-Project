@@ -1,3 +1,4 @@
+import path from 'node:path'
 import 'dotenv/config'
 
 const REQUIRED = ['DATABASE_URL', 'JWT_SECRET', 'JWT_REFRESH_SECRET', 'ENCRYPTION_KEY']
@@ -98,9 +99,20 @@ export const config = {
     from: process.env.MAIL_FROM ?? 'CloudPulse <no-reply@cloudpulse.local>',
     codeTtlMinutes: int(process.env.VERIFY_CODE_TTL_MINUTES, 10),
     codeMaxAttempts: int(process.env.VERIFY_CODE_MAX_ATTEMPTS, 5),
+    // Shorter than the signup code: a reset code is the only thing standing
+    // between a leaked inbox and a full account takeover.
+    resetCodeTtlMinutes: int(process.env.RESET_CODE_TTL_MINUTES, 15),
+    resetCodeMaxAttempts: int(process.env.RESET_CODE_MAX_ATTEMPTS, 5),
   },
   encryption: {
     // base64 of exactly 32 bytes; wraps every stored cloud access key.
     key: process.env.ENCRYPTION_KEY,
+  },
+  uploads: {
+    // Avatars live on disk under UPLOAD_DIR; at deploy this points at a volume
+    // or a bucket-backed directory. Only the filename is stored in Postgres.
+    dir: process.env.UPLOAD_DIR ?? path.join(process.cwd(), 'uploads'),
+    avatarDir: path.join(process.env.UPLOAD_DIR ?? path.join(process.cwd(), 'uploads'), 'avatars'),
+    avatarMaxBytes: int(process.env.AVATAR_MAX_BYTES, 2 * 1024 * 1024),
   },
 }

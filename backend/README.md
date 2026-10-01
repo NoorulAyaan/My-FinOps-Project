@@ -50,6 +50,17 @@ openssl rand -base64 48   # JWT_REFRESH_SECRET
 `src/config.js` refuses to boot on a placeholder, on a secret shorter than 16
 characters (32 in production), or if both secrets are equal.
 
+### Avatars
+
+Uploaded avatars are written to `UPLOAD_DIR/avatars` (default `./uploads/avatars`,
+overridable with `UPLOAD_DIR`) and served back from `/uploads/avatars`. Nothing else in
+the API reads that directory, and files are named by the server rather than by the
+uploader.
+
+`backend/uploads/` is gitignored. On a deploy, that path needs a persistent volume —
+otherwise every avatar disappears when the container is replaced. If you would rather
+not manage a volume, that directory is the only thing to swap for object storage.
+
 ---
 
 ## Commands
@@ -59,6 +70,7 @@ characters (32 in production), or if both secrets are equal.
 | `npm run dev` | Start with hot reload (`node --watch`) |
 | `npm start` | Start normally |
 | `npm run migrate` | Apply pending `db/*.sql`, tracked in `schema_migrations` |
+| `npm run mail:test` | Check the SMTP settings; add an address to also send a test mail |
 | `npm test` | Run the suite against the test databases |
 
 `npm test` needs two throwaway databases (they are truncated per run, never touched):
@@ -129,16 +141,34 @@ omitted. The access token is 15 minutes either way.
 `200` on success, `401` if the credentials do not match, `403 email_not_verified` if the
 address has not been verified, `422` on validation failure.
 
-### `POST /signin`
+### `POST /api/auth/forgot-password`
 
 ```json
-{ "email": "devin@acme.corp", "password": "correct-horse-9", "remember": true }
+{ "email": "devin@acme.corp" }
 ```
 
-`remember` drives the refresh token lifetime only — 30 days when `true`, 1 day when
-omitted. The access token is 15 minutes either way.
+Always `200` with the same message, whether or not the address is registered. Includes
+`devCode` in console mode only. See [Email verification behaviour](#email-verification-behaviour)
+— the non-enumeration reasoning applies here identically.
 
-`200` on success, `401` if the credentials do not match, `422` on validation failure.
+Issuing a new code consumes any previous one, so only the newest email works.
+
+### `POST /api/auth/reset-password`
+
+```json
+{ "email": "devin@acme.corp", "code": "123456", "password": "new-pass-9", "confirm": "new-pass-9" }
+```
+
+Takes the **email**, not a user id: the forgot-password response must stay identical for
+registered and unknown addresses, so it cannot hand back an id that would reveal which
+accounts exist. The code is the only secret.
+
+`200` on success. The new password is hashed, the code is consumed, and **every refresh
+token for the user is revoked** — so any session an attacker was holding stops working.
+
+`400` if the code is wrong, expired, spent, or belongs to a different address, or if the
+address is not registered (deliberately identical to the other cases). `429` once the
+attempt cap (5) is reached. `422` on validation failure.
 
 ### `POST /api/auth/refresh`
 
@@ -160,6 +190,69 @@ Always `204`, with or without a token.
 ### `GET /api/auth/me`
 
 Requires `Authorization: Bearer <accessToken>`. Returns the current user.
+
+### `PATCH /api/auth/me`
+
+```json
+{ "name": "Devin Patel", "timezone": "Europe/London" }
+```
+
+Updates the profile. Both fields are optional, but at least one must be present; an
+explicitly empty `name` is a `422` rather than a silent no-op. `timezone` accepts IANA
+names only (`Area/City`, optionally with a third segment) and can be set to `null`.
+`timezone` is not used for anything yet. `422` returns a `details` object keyed by
+field.
+
+Returns the updated user. The email address is not changeable here.
+
+### `POST /api/auth/me/avatar`
+
+`multipart/form-data` with one `avatar` part. Accepts PNG, JPEG, WebP and GIF, verified
+by magic bytes rather than the declared content type, up to `AVATAR_MAX_BYTES` (2 MB).
+
+The file is stored under `UPLOAD_DIR/avatars` with a generated name, so an uploaded
+filename is never used as a path. Returns the updated user. The previous file is only
+unlinked after the database row points at the new one, so a database failure cannot
+leave the account without an avatar.
+
+### `DELETE /api/auth/me/avatar`
+
+Removes the avatar file and clears `avatar_path`. `204`. Safe to call when there is no
+avatar.
+
+### `POST /api/auth/change-password`
+
+```json
+{ "currentPassword": "...", "newPassword": "..." }
+```
+
+Requires the current password, so a stolen session cannot lock the owner out. On
+success the password is re-hashed and **every other session is revoked**; the session
+that made the request stays valid. `401` if the current password is wrong, `422` on a
+new password that fails validation.
+
+Note this is *not* the same as the reset flow: it never emails anything and never
+leaves an existing session usable on another device.
+
+### Account sessions
+
+All require `Authorization: Bearer <accessToken>` and are scoped to the bearer, so a
+guessed session id cannot reach another account's rows.
+
+| Method | Path | Notes |
+|---|---|---|
+| `GET` | `/api/account/sessions` | `{ "sessions": [...], "currentSessionId": "12" }` |
+| `DELETE` | `/api/account/sessions/:id` | `204`, or `404` if already gone |
+| `POST` | `/api/account/sessions/revoke-others` | Keeps the caller's session |
+
+A session is one row in `refresh_tokens`. Because the plaintext token is never
+recoverable, sessions are identified by the device label, user-agent and IP captured at
+sign-in. `currentSessionId` comes from the `sid` claim on the access token, so the
+client does not have to guess which row it is.
+
+Refresh rotation preserves the device metadata on the replacement row, so a rotated
+session does not reappear as "Unknown device", and `last_seen_at` reflects the most
+recent use rather than the original sign-in.
 
 ### Cloud accounts
 
@@ -292,7 +385,8 @@ unknown origin gets a 403 rather than a 500.
 - [ ] Serve over TLS and keep `Strict-Transport-Security` (on by default via `helmet`)
 - [ ] Move rate limiting to a shared store once there is more than one instance
 - [x] Add email verification
-- [ ] Add a password reset flow — it does not exist yet
+- [x] Add a password reset flow
+- [ ] Put avatar uploads on a persistent volume or object storage
 - [ ] Move tokens out of `localStorage` into `HttpOnly` cookies
 - [ ] Validate submitted credentials against each provider's API instead of `status = 'pending'`
 - [ ] Ingest costs from AWS Cost Explorer, Azure Cost Management and GCP Cloud Billing
@@ -315,30 +409,48 @@ src/
 ├── mailer.js              Nodemailer transport, console fallback when unset
 ├── auth.service.js        queries, bcrypt, session issue/rotate/revoke
 ├── verification.service.js  6-digit codes: issue, verify, expiry, attempt cap
+├── reset.service.js       password-reset codes: issue, redeem, revoke sessions
+├── account.service.js     profile + avatar updates, public user shape, sessions
 ├── cloud.service.js       provider validation and per-user account CRUD
 ├── routes/
 │   ├── auth.js            /signup /verify-email /resend-verification /signin
-│   │                      /refresh /logout /me
+│   │                      /forgot-password /reset-password /refresh /logout /me
+│   │                      plus PATCH /me, avatar upload/removal, /change-password
+│   ├── account.js         /sessions, /sessions/:id, /sessions/revoke-others
 │   └── cloudAccounts.js   /providers plus per-user cloud account CRUD
 └── middleware/
     ├── asyncHandler.js    forwards async rejections to the error handler
     ├── requireAuth.js     Bearer token verification
+    ├── upload.js          Multer disk storage, magic-byte image check
     └── errorHandler.js    ApiError -> JSON, plus Postgres and parser cases
 db/
 ├── 001_create_users.sql
 ├── 002_create_refresh_tokens.sql
 ├── 003_email_verification_and_cloud_accounts.sql
+├── 004_password_reset_codes.sql
+├── 005_account_settings.sql
 └── migrate.js
 test/auth.test.js          auth + email verification tests
 test/cloudAccounts.test.js cloud account CRUD and encryption tests
+test/passwordReset.test.js forgot-password / reset-password tests
+test/account.test.js      profile, avatar, password change, sessions
 ```
 
-`npm test` runs both files: 104 tests total.
+`npm test` runs all four: 151 tests total. Each file uses its own database
+(`finops_test`, `finops_test_cloud`, `finops_test_reset`, `finops_test_account`)
+because `node --test` runs files in parallel and they truncate `users`. Create them
+once with:
+
+```bash
+docker exec -it postgres psql -U postgres \
+  -c 'CREATE DATABASE finops_test_account;'
+```
 
 ## Frontend integration
 
 `frontend/` already talks to this API. `frontend/src/api/client.js` holds the token
-storage and refresh logic, and Vite proxies `/api` to port 4000 so the browser sees
+storage and refresh logic, and Vite proxies `/api` **and `/uploads`** to port 4000 so
+the browser sees
 one origin:
 
 ```js
@@ -369,3 +481,39 @@ cannot be used to discover which addresses are registered. When `SMTP_HOST` is u
 the code goes to the console instead, and the response carries `devCode` so the
 frontend can complete the flow locally. With SMTP configured, `devCode` is never
 returned.
+
+### Sending real email
+
+Set the SMTP fields in `.env` and check them before touching the signup flow:
+
+```bash
+npm run mail:test              # verifies the connection only
+npm run mail:test you@x.com    # also sends a real message
+```
+
+The script prints what it is about to use, so a typo is obvious. It exits non-zero
+if the credentials are wrong, which is far easier to debug than a failed signup.
+
+**Gmail** requires two-factor auth on the account, then an App Password — the
+account password will not work over SMTP:
+
+1. Enable 2FA: <https://myaccount.google.com/security>
+2. Create an App Password: <https://myaccount.google.com/apppasswords>
+3. Use that 16-character password in `SMTP_PASSWORD`
+
+```bash
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=you@gmail.com
+SMTP_PASSWORD=<the app password>
+MAIL_FROM=CloudPulse <you@gmail.com>
+```
+
+`MAIL_FROM` must be on the domain you authenticated with, or SPF/DKIM reject the
+message. For a real product use a domain you control (Resend, SendGrid and Mailgun
+all work through the same fields). Personal Gmail is fine for development but caps
+out around 500 messages a day and shows the code as a security alert.
+
+`SMTP_SECURE=true` is for port 465 implicit TLS. Port 587 upgrades over STARTTLS,
+which is why it stays `false`.

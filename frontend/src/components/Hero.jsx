@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import AuthLink from './AuthLink'
 import StatusPill from './StatusPill'
 import SpendTrendChart from './charts/SpendTrendChart'
 import ShareBar from './charts/ShareBar'
@@ -44,10 +45,10 @@ export default function Hero() {
               <span>Open Cost Dashboard</span>
               <span className="absolute -inset-0.5 -z-10 rounded-lg bg-primary-container opacity-40 blur-sm transition duration-300 group-hover:opacity-75" />
             </Link>
-            <Link to="/login" className="btn-secondary">
+            <AuthLink signedInTo="/connect" className="btn-secondary">
               <span className="material-symbols-outlined text-headline-sm leading-none">add_link</span>
               <span>Connect Cloud Accounts</span>
-            </Link>
+            </AuthLink>
           </div>
 
           {/* Trust metrics */}

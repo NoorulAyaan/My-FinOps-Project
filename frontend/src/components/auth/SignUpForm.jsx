@@ -4,7 +4,6 @@ import MaterialSymbol from '@/components/MaterialSymbol'
 import Divider from './Divider'
 import PasswordStrength from './PasswordStrength'
 import TextField from './TextField'
-import { GoogleButton } from './SignInForm'
 import CodeInput from './CodeInput'
 import { api } from '@/api/client'
 import { useAuth } from '@/auth/AuthContext'
@@ -92,12 +91,12 @@ export default function SignUpForm() {
         </p>
       </div>
 
-      <GoogleButton />
       <Divider className="my-space-md">Or register with work email</Divider>
 
       <form className="flex flex-col gap-space-sm" onSubmit={handleSubmit} noValidate>
         <div className="grid grid-cols-1 gap-space-sm sm:grid-cols-2">
           <TextField
+          darkText
             label="Full Name"
             icon="badge"
             placeholder="Devin Patel"
@@ -108,6 +107,7 @@ export default function SignUpForm() {
             inputClassName="pr-3"
           />
           <TextField
+          darkText
             label="Work Email"
             icon="mail"
             type="email"
@@ -122,6 +122,7 @@ export default function SignUpForm() {
 
         <div className="mt-1 flex flex-col gap-1.5">
           <TextField
+          darkText
             label="Password"
             icon="key"
             type="password"
@@ -135,6 +136,7 @@ export default function SignUpForm() {
         </div>
 
         <TextField
+          darkText
           label="Confirm Password"
           icon="verified_user"
           type="password"

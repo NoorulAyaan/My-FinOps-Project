@@ -6,17 +6,30 @@ import { unauthorized } from './errors.js'
 const ACCESS_TYP = 'access'
 const REFRESH_TYP = 'refresh'
 
-function sign(user, typ, ttl, secret) {
-  return jwt.sign({ sub: String(user.id), email: user.email, name: user.name, typ }, secret, {
-    algorithm: 'HS256',
-    expiresIn: ttl,
-    issuer: config.jwt.issuer,
-    audience: config.jwt.audience,
-  })
+function sign(user, typ, ttl, secret, sessionId) {
+  return jwt.sign(
+    {
+      sub: String(user.id),
+      email: user.email,
+      name: user.name,
+      typ,
+      // The refresh-token row this access token descends from. It lets the
+      // settings page mark the current device and lets a password change revoke
+      // every session except the one making the request.
+      ...(sessionId ? { sid: String(sessionId) } : {}),
+    },
+    secret,
+    {
+      algorithm: 'HS256',
+      expiresIn: ttl,
+      issuer: config.jwt.issuer,
+      audience: config.jwt.audience,
+    },
+  )
 }
 
-export function signAccessToken(user) {
-  return sign(user, ACCESS_TYP, config.jwt.accessTtl, config.jwt.secret)
+export function signAccessToken(user, sessionId) {
+  return sign(user, ACCESS_TYP, config.jwt.accessTtl, config.jwt.secret, sessionId)
 }
 
 /**
@@ -43,8 +56,8 @@ export function toSeconds(ttl) {
   return n * { s: 1, m: 60, h: 3600, d: 86400 }[m[2]]
 }
 
-export function accessTokenResponse(user) {
-  const token = signAccessToken(user)
+export function accessTokenResponse(user, sessionId) {
+  const token = signAccessToken(user, sessionId)
   const { iat, exp } = jwt.decode(token)
   return { token, tokenType: 'Bearer', expiresIn: exp - iat, expiresAt: new Date(exp * 1000).toISOString() }
 }

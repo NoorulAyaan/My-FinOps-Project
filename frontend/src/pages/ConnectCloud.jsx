@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import BrandLogo from '@/components/BrandLogo'
 import MaterialSymbol from '@/components/MaterialSymbol'
 import StatusPill from '@/components/StatusPill'
@@ -95,8 +95,22 @@ export default function ConnectCloud() {
       <div className="pointer-events-none fixed -top-32 left-1/2 h-96 w-96 -translate-x-1/2 rounded-full bg-primary-container/10 blur-3xl" />
 
       <div className="relative z-10 mx-auto flex min-h-screen max-w-3xl flex-col gap-space-lg px-space-lg py-space-xl">
-        <header className="flex items-center justify-between">
-          <BrandLogo />
+        <header className="flex flex-wrap items-center justify-between gap-space-sm">
+          <div className="flex items-center gap-space-sm">
+            <Link
+              to="/"
+              className="flex items-center gap-space-xs rounded-lg bg-surface-container-high px-space-sm py-2 font-title-md text-title-md text-on-surface transition-colors hover:bg-surface-bright"
+            >
+              <MaterialSymbol name="arrow_back" className="text-title-md" />
+              <span className="hidden sm:inline">Back to home</span>
+            </Link>
+            <Link to="/" className="flex items-center gap-space-sm" aria-label="CloudPulse home">
+              <BrandLogo className="h-8 w-8" />
+              <span className="font-headline-sm text-headline-sm tracking-tight text-primary">
+                CloudPulse
+              </span>
+            </Link>
+          </div>
           <div className="flex items-center gap-space-sm">
             <span className="font-body-sm text-body-sm text-on-surface-variant">{user?.email}</span>
             <button

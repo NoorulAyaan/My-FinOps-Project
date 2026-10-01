@@ -43,6 +43,12 @@ export function AuthProvider({ children }) {
     setStatus('authenticated')
   }, [])
 
+  // Lets the settings page push a fresh profile (name, avatar, timezone) back
+  // into the header without a full re-authentication.
+  const updateUser = useCallback((next) => {
+    setUser((current) => ({ ...current, ...next }))
+  }, [])
+
   const signOut = useCallback(async () => {
     try {
       await api.logout()
@@ -55,8 +61,8 @@ export function AuthProvider({ children }) {
   }, [])
 
   const value = useMemo(
-    () => ({ user, status, adoptSession, signOut }),
-    [user, status, adoptSession, signOut],
+    () => ({ user, status, adoptSession, updateUser, signOut }),
+    [user, status, adoptSession, updateUser, signOut],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

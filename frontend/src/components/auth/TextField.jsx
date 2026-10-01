@@ -18,6 +18,9 @@ const TextField = forwardRef(function TextField(
     className = '',
     inputClassName = '',
     error,
+    // The auth forms sit on light input fills, where the default light text is
+    // unreadable. Pass darkText to switch the input value to black.
+    darkText = false,
   },
   ref,
 ) {
@@ -49,7 +52,9 @@ const TextField = forwardRef(function TextField(
           placeholder={placeholder}
           aria-invalid={error ? 'true' : undefined}
           aria-describedby={error ? errorId : undefined}
-          className={`w-full rounded-lg bg-surface-container-lowest py-2.5 pl-10 text-body-md font-body-md text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:ring-1 focus:ring-primary-container ${
+          className={`w-full rounded-lg bg-surface-container-lowest py-2.5 pl-10 text-body-md font-body-md ${
+            darkText ? 'text-neutral-900' : 'text-on-surface'
+          } placeholder:text-on-surface-variant/40 focus:outline-none focus:ring-1 focus:ring-primary-container ${
             isPassword ? 'pr-10' : 'pr-4'
           } ${error ? 'ring-1 ring-status-crit' : ''} ${inputClassName}`}
         />

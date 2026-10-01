@@ -60,9 +60,13 @@ async function refreshSession() {
   return refreshInFlight
 }
 
-async function send(path, { method = 'GET', body, auth = true, retry = true } = {}) {
+async function send(path, { method = 'GET', body, form, auth = true, retry = true } = {}) {
   const headers = {}
-  if (body !== undefined) headers['content-type'] = 'application/json'
+  // FormData needs the browser to set a multipart boundary, so the content type
+  // is deliberately left unset for it.
+  if (form === undefined && body !== undefined) {
+    headers['content-type'] = 'application/json'
+  }
   if (auth) {
     const accessToken = tokens.access()
     if (accessToken) headers.authorization = `Bearer ${accessToken}`
@@ -71,12 +75,12 @@ async function send(path, { method = 'GET', body, auth = true, retry = true } = 
   const res = await fetch(path, {
     method,
     headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
+    body: form !== undefined ? form : body === undefined ? undefined : JSON.stringify(body),
   })
 
   if (res.status === 401 && auth && retry && tokens.refresh()) {
     if (await refreshSession()) {
-      return send(path, { method, body, auth, retry: false })
+      return send(path, { method, body, form, auth, retry: false })
     }
   }
 
@@ -95,8 +99,32 @@ export const api = {
     send('/api/auth/verify-email', { method: 'POST', body: { userId, code }, auth: false }),
   resendVerification: (email) =>
     send('/api/auth/resend-verification', { method: 'POST', body: { email }, auth: false }),
+  forgotPassword: (email) =>
+    send('/api/auth/forgot-password', { method: 'POST', body: { email }, auth: false }),
+  resetPassword: ({ email, code, password, confirm }) =>
+    send('/api/auth/reset-password', {
+      method: 'POST',
+      body: { email, code, password, confirm },
+      auth: false,
+    }),
   me: () => send('/api/auth/me'),
+  updateProfile: (input) => send('/api/auth/me', { method: 'PATCH', body: input }),
+  uploadAvatar: (file) => {
+    const form = new FormData()
+    form.append('avatar', file)
+    return send('/api/auth/me/avatar', { method: 'POST', form })
+  },
+  removeAvatar: () => send('/api/auth/me/avatar', { method: 'DELETE' }),
+  changePassword: ({ currentPassword, newPassword }) =>
+    send('/api/auth/change-password', {
+      method: 'POST',
+      body: { currentPassword, newPassword },
+    }),
   logout: () => send('/api/auth/logout', { method: 'POST', body: { refreshToken: tokens.refresh() } }),
+
+  listSessions: () => send('/api/account/sessions'),
+  revokeSession: (id) => send(`/api/account/sessions/${id}`, { method: 'DELETE' }),
+  revokeOtherSessions: () => send('/api/account/sessions/revoke-others', { method: 'POST' }),
 
   listCloudProviders: () => send('/api/cloud-accounts/providers'),
   listCloudAccounts: () => send('/api/cloud-accounts'),

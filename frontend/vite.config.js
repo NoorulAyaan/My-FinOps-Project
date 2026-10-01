@@ -15,9 +15,11 @@ export default defineConfig({
     port: 5173,
     open: true,
     // Keeps the browser on a single origin, so the auth requests need no CORS
-    // preflight in development.
+    // preflight in development. /uploads is proxied too so avatar URLs served by
+    // the API resolve against the frontend origin instead of 404ing.
     proxy: {
       '/api': { target: API_TARGET, changeOrigin: true },
+      '/uploads': { target: API_TARGET, changeOrigin: true },
     },
   },
 })

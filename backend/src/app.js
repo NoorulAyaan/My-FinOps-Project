@@ -6,6 +6,7 @@ import { config } from './config.js'
 import { ApiError, tooManyRequests } from './errors.js'
 import { errorHandler, notFound } from './middleware/errorHandler.js'
 import authRoutes from './routes/auth.js'
+import accountRoutes from './routes/account.js'
 import cloudAccountRoutes from './routes/cloudAccounts.js'
 import { databaseStatus, renderStatusPage } from './statusPage.js'
 
@@ -34,13 +35,40 @@ export function createApp() {
 
   app.use(express.json({ limit: '10kb' }))
 
+  // Avatar bytes. Served with a nosniff header and a fixed image content type so
+  // a stored file can never be interpreted as an active document.
+  app.use(
+    '/uploads/avatars',
+    express.static(config.uploads.avatarDir, {
+      index: false,
+      dotfiles: 'deny',
+      maxAge: '1h',
+      setHeaders: (res) => {
+        res.setHeader('X-Content-Type-Options', 'nosniff')
+        res.setHeader('Content-Security-Policy', "default-src 'none'; img-src 'self'; sandbox")
+        res.setHeader('Cross-Origin-Resource-Policy', 'same-origin')
+      },
+    }),
+  )
+
   const STARTED_AT = Date.now()
   const ENDPOINTS = [
     ['POST', '/api/auth/signup', 'create an account'],
+    ['POST', '/api/auth/verify-email', 'confirm an email code'],
+    ['POST', '/api/auth/resend-verification', 're-send an email code'],
+    ['POST', '/api/auth/forgot-password', 'request a reset code'],
+    ['POST', '/api/auth/reset-password', 'set a new password'],
     ['POST', '/api/auth/signin', 'start a session'],
     ['POST', '/api/auth/refresh', 'rotate tokens'],
     ['POST', '/api/auth/logout', 'revoke a session'],
     ['GET', '/api/auth/me', 'current user'],
+    ['PATCH', '/api/auth/me', 'update profile'],
+    ['POST', '/api/auth/me/avatar', 'upload a profile picture'],
+    ['DELETE', '/api/auth/me/avatar', 'remove the profile picture'],
+    ['POST', '/api/auth/change-password', 'change password'],
+    ['GET', '/api/account/sessions', 'list active sessions'],
+    ['DELETE', '/api/account/sessions/:id', 'revoke one session'],
+    ['POST', '/api/account/sessions/revoke-others', 'sign out other devices'],
     ['GET', '/health', 'JSON status'],
   ]
 
@@ -95,7 +123,24 @@ export function createApp() {
   app.use('/api/auth/signin', authLimiter)
   app.use('/api/auth/verify-email', verifyLimiter)
   app.use('/api/auth/resend-verification', verifyLimiter)
+  // A reset code is brute-forceable for the same reason a verification code is,
+  // and requesting one is a mail-bombing vector, so it shares the hard limit.
+  app.use('/api/auth/forgot-password', verifyLimiter)
+  app.use('/api/auth/reset-password', verifyLimiter)
+  // Credential re-entry on a password change: brute-forcing the current
+  // password from a hijacked session should not be unlimited.
+  const settingsLimiter = rateLimit({
+    windowMs: config.rateLimit.authWindowMs,
+    limit: config.rateLimit.authMax,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    skip: () => config.nodeEnv === 'test',
+    handler: (_req, _res, next) => next(tooManyRequests()),
+  })
+
+  app.use('/api/auth/change-password', settingsLimiter)
   app.use('/api/auth', authRoutes)
+  app.use('/api/account', accountRoutes)
   app.use('/api/cloud-accounts', cloudAccountRoutes)
 
   app.use(notFound)

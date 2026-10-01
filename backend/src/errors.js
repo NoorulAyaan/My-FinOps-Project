@@ -30,6 +30,12 @@ export const invalidCredentials = () =>
   // whether an email address is registered.
   new ApiError(401, 'invalid_credentials', 'Invalid email or password.')
 
+// Only used where the caller is already authenticated, so there is no address to
+// enumerate — being vague here would just confuse someone changing their
+// password.
+export const wrongPassword = () =>
+  new ApiError(401, 'invalid_credentials', 'Your current password is not correct.')
+
 export const emailTaken = () =>
   new ApiError(409, 'email_taken', 'An account with that email already exists.')
 

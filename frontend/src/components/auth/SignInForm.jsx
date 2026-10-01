@@ -1,6 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import GoogleIcon from '@/components/GoogleIcon'
+import { Link, useNavigate } from 'react-router-dom'
 import MaterialSymbol from '@/components/MaterialSymbol'
 import Divider from './Divider'
 import TextField from './TextField'
@@ -48,11 +47,11 @@ export default function SignInForm() {
         </p>
       </div>
 
-      <GoogleButton />
-      <Divider className="my-space-lg">Or continue with enterprise email</Divider>
+      <Divider className="my-space-lg">Use your registered email</Divider>
 
       <form className="flex flex-col gap-space-md" onSubmit={handleSubmit} noValidate>
         <TextField
+          darkText
           label="Work Email Address"
           icon="mail"
           type="email"
@@ -64,6 +63,7 @@ export default function SignInForm() {
         />
 
         <TextField
+          darkText
           label="Password"
           icon="lock"
           type="password"
@@ -84,9 +84,9 @@ export default function SignInForm() {
             />
             <span className="font-body-sm text-body-sm text-on-surface-variant">Remember me for 30 days</span>
           </label>
-          <a href="#forgot" className="font-title-md text-title-md text-primary-container hover:underline">
+          <Link to="/forgot-password" className="font-title-md text-title-md text-primary-container hover:underline">
             Forgot Password?
-          </a>
+          </Link>
         </div>
 
         {error && (
@@ -102,19 +102,5 @@ export default function SignInForm() {
         </button>
       </form>
     </div>
-  )
-}
-
-export function GoogleButton() {
-  return (
-    <button
-      type="button"
-      disabled
-      title="Not wired up yet"
-      className="flex w-full items-center justify-center gap-space-md rounded-lg bg-surface-container-highest px-space-md py-3 font-title-md text-title-md text-on-surface opacity-50 shadow-sm"
-    >
-      <GoogleIcon />
-      <span>Continue with Google</span>
-    </button>
   )
 }

@@ -7,9 +7,12 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "npm run test:auth && npm run test:finops",
+    "test": "npm run test:auth && npm run test:reset && npm run test:header && npm run test:settings && npm run test:finops",
     "test:auth": "esbuild tests/auth.smoke.jsx --bundle --jsx=automatic --platform=node --format=cjs --outfile=node_modules/.cache/auth.smoke.cjs --log-level=error && node node_modules/.cache/auth.smoke.cjs",
-    "test:finops": "esbuild tests/finops.smoke.jsx --bundle --jsx=automatic --platform=node --format=cjs --outfile=node_modules/.cache/finops.smoke.cjs --log-level=error && node node_modules/.cache/finops.smoke.cjs"
+    "test:reset": "esbuild tests/reset.smoke.jsx --bundle --jsx=automatic --platform=node --format=cjs --outfile=node_modules/.cache/reset.smoke.cjs --log-level=error && node node_modules/.cache/reset.smoke.cjs",
+    "test:finops": "esbuild tests/finops.smoke.jsx --bundle --jsx=automatic --platform=node --format=cjs --outfile=node_modules/.cache/finops.smoke.cjs --log-level=error && node node_modules/.cache/finops.smoke.cjs",
+    "test:header": "esbuild tests/header.smoke.jsx --bundle --jsx=automatic --platform=node --format=cjs --outfile=node_modules/.cache/header.smoke.cjs --log-level=error && node node_modules/.cache/header.smoke.cjs",
+    "test:settings": "esbuild tests/settings.smoke.jsx --bundle --jsx=automatic --platform=node --format=cjs --outfile=node_modules/.cache/settings.smoke.cjs --log-level=error && node node_modules/.cache/settings.smoke.cjs"
   },
   "dependencies": {
     "react": "^18.3.1",

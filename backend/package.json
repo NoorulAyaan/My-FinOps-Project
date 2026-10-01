@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Auth API for CloudPulse FinOps — sign up and sign in only.",
+  "description": "Auth API for CloudPulse FinOps — email-verified accounts and cloud credentials.",
   "engines": {
     "node": ">=20"
   },
@@ -11,6 +11,7 @@
     "dev": "node --watch src/server.js",
     "start": "node src/server.js",
     "migrate": "node db/migrate.js",
+    "mail:test": "node scripts/mail-test.js",
     "test": "node --test test/*.test.js"
   },
   "dependencies": {
@@ -21,6 +22,7 @@
     "express-rate-limit": "^7.5.0",
     "helmet": "^8.0.0",
     "jsonwebtoken": "^9.0.2",
+    "multer": "^2.4.0",
     "nodemailer": "^10.0.13",
     "pg": "^8.13.1"
   }

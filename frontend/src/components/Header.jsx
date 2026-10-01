@@ -1,5 +1,7 @@
 import { Link, NavLink } from 'react-router-dom'
 import BrandLogo from './BrandLogo'
+import AccountMenu from './AccountMenu'
+import { useAuth } from '@/auth/AuthContext'
 
 const NAV = [
   { label: 'Platform', to: '/#platforms' },
@@ -9,6 +11,9 @@ const NAV = [
 ]
 
 export default function Header() {
+  const { user, status } = useAuth()
+  const signedIn = status === 'authenticated' && user
+
   return (
     <header className="fixed inset-x-0 top-0 z-50 border-b border-white/[0.06] bg-surface/85 shadow-[0_1px_8px_rgba(0,0,0,0.4)] backdrop-blur-xl">
       <div className="flex h-16 w-full items-center justify-between gap-space-md px-margin">
@@ -38,12 +43,17 @@ export default function Header() {
             <span className="font-label-caps text-label-caps">3 clouds connected</span>
           </div>
 
-          <Link
-            to="/login"
-            className="hidden rounded-lg bg-surface-container-high px-space-md py-space-sm font-title-md text-title-md text-on-surface transition-colors hover:bg-surface-bright sm:inline-flex"
-          >
-            Login / Sign Up
-          </Link>
+          {/* Signed in: show who is here instead of the auth pitch. */}
+          {signedIn ? (
+            <AccountMenu className="hidden sm:flex" />
+          ) : (
+            <Link
+              to="/login"
+              className="hidden rounded-lg bg-surface-container-high px-space-md py-space-sm font-title-md text-title-md text-on-surface transition-colors hover:bg-surface-bright sm:inline-flex"
+            >
+              Sign in to console
+            </Link>
+          )}
 
           <Link
             to="/dashboard"

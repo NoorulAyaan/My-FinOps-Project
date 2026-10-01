@@ -5,6 +5,8 @@ import ConnectCloud from '@/pages/ConnectCloud'
 import Landing from '@/pages/Landing'
 import Auth from '@/pages/Auth'
 import Dashboard from '@/pages/Dashboard'
+import ForgotPassword from '@/pages/ForgotPassword'
+import Settings from '@/pages/Settings'
 
 export default function App() {
   return (
@@ -14,6 +16,7 @@ export default function App() {
           <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Auth />} />
           <Route path="/signup" element={<Auth initialMode="signup" />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route
             path="/connect"
             element={
@@ -27,6 +30,14 @@ export default function App() {
             element={
               <RequireAuth>
                 <Dashboard />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <RequireAuth>
+                <Settings />
               </RequireAuth>
             }
           />

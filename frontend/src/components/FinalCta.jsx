@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import AuthLink from './AuthLink'
 import StatusPill from './StatusPill'
 import { guarantees, kpis, totalResources } from '@/data/finops'
 import { usdCompact } from '@/utils/format'
@@ -41,13 +42,13 @@ export default function FinalCta() {
             <span className="material-symbols-outlined text-headline-sm leading-none">play_arrow</span>
             <span>View Live Dashboard</span>
           </Link>
-          <Link
-            to="/login"
+          <AuthLink
+            signedInTo="/connect"
             className="inline-flex items-center justify-center gap-space-xs rounded-lg bg-surface-container-highest px-space-xl py-space-md font-title-md text-title-md text-on-surface shadow-sm transition-all hover:bg-surface-bright"
           >
             <span>Connect Your Clouds</span>
             <span className="material-symbols-outlined text-headline-sm leading-none">arrow_forward</span>
-          </Link>
+          </AuthLink>
         </div>
 
         <div className="relative z-10 flex flex-wrap items-center justify-center gap-space-md pt-space-xs font-body-sm text-body-sm text-on-surface-variant">

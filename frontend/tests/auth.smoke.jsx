@@ -4,6 +4,8 @@
  *
  * Run: npm run test:auth
  */
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { createElement } from 'react'
@@ -38,27 +40,47 @@ function renderAt(path, initialMode) {
   return collect(renderToStaticMarkup(tree))
 }
 
+// Bundled to CJS, so import.meta.url is unavailable; resolve from the package root.
+const authSrc = readFileSync(resolve(process.cwd(), 'src/pages/Auth.jsx'), 'utf8')
+const appSrc = readFileSync(resolve(process.cwd(), 'src/App.jsx'), 'utf8')
+
 const signIn = renderAt('/login')
 const signUp = renderAt('/signup', 'signup')
 
 const checks = [
   ['signin: heading rendered', signIn.html.includes('Welcome Back')],
   ['signin: email + password fields', signIn.inputs.filter((t) => t === 'email' || t === 'password').length === 2],
-  ['signin: google button', signIn.buttons.includes('Continue with Google')],
+  ['signin: google button removed', !signIn.buttons.includes('Continue with Google') && !signUp.buttons.includes('Continue with Google')],
   ['signin: remember-me checkbox', signIn.inputs.includes('checkbox')],
   ['signin: footer prompts "Sign Up"', signIn.buttons.includes('Sign Up')],
   ['signin: signup form hidden', !signIn.html.includes('Full Name')],
-  ['signin: divider copy', signIn.html.includes('Or continue with enterprise email')],
+  ['signin: divider copy', signIn.html.includes('Use your registered email')],
   ['signup: heading rendered', signUp.html.includes('Start Your Free Cloud Observability Trial')],
   ['signup: two password fields', signUp.inputs.filter((t) => t === 'password').length === 2],
   ['signup: footer prompts "Sign In"', signUp.buttons.includes('Sign In')],
   ['signup: signin form hidden', !signUp.html.includes('Welcome Back')],
   ['signup: strength meter present', signUp.html.includes('Strength:')],
   ['signup: divider copy', signUp.html.includes('Or register with work email')],
-  ['a11y: tablist + tabpanel roles', signIn.html.includes('role="tablist"') && signUp.html.includes('role="tabpanel"')],
-  ['a11y: both tabs expose aria-selected', (signIn.html.match(/aria-selected/g) || []).length === 2],
+  // The mode tabs were removed; the footer link is the only switcher now.
+  ['a11y: no tablist remains', !signIn.html.includes('role="tablist"') && !signUp.html.includes('role="tablist"')],
+  ['a11y: footer still switches modes', signIn.buttons.includes('Sign Up') && signUp.buttons.includes('Sign In')],
   ['a11y: back-to-site link', signIn.html.includes('Back to site')],
-  ['brand: CloudPulse + tagline', signIn.html.includes('Enterprise Observability')],
+  ['a11y: back-to-home button', signIn.html.includes('Back to home') && signUp.html.includes('Back to home')],
+
+  // --- auth mode routing ---
+  [
+    'source: Auth keeps the URL in step with the active tab',
+    /navigate\(isSignIn \? '\/login' : '\/signup', \{ replace: true \}\)/.test(authSrc),
+  ],
+  [
+    'source: /signup renders the signup form',
+    /path="\/signup"[\s\S]{0,120}initialMode="signup"/.test(appSrc),
+  ],
+  [
+    'source: /login renders the signin form',
+    /path="\/login"[\s\S]{0,120}element=\{<Auth \/>\}/.test(appSrc),
+  ],
+  ['brand: CloudPulse + tagline', signIn.html.includes('Multi-Cloud FinOps')],
 
   // --- Centering regression -------------------------------------------------
   // The card and the assurance strip must be siblings in a COLUMN flex

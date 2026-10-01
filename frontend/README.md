@@ -87,6 +87,7 @@ Press `Ctrl + C` in the terminal.
 | `/` | Landing page — cost breakdown, resource inventory, savings queue (marketing mock data) |
 | `/signup` | Sign-up, then a 6-digit email verification step |
 | `/login` | Sign-in (tabs switch between Sign In and Create Account); verified accounts land on `/dashboard` |
+| `/forgot-password` | Email a reset code, then set a new password. Public. |
 | `/dashboard` | Protected. Lists your connected clouds, or an onboarding state with a link to `/connect` |
 | `/connect` | Protected. Add/remove AWS, Azure and GCP credentials |
 
@@ -111,7 +112,8 @@ Press `Ctrl + C` in the terminal.
 ```
 src/
 ├── main.jsx                 Entry point — mounts React into the page
-├── App.jsx                  Router: /, /signup, /login, /dashboard, /connect
+├── App.jsx                  Router: /, /signup, /login, /forgot-password,
+│                            /dashboard, /connect
 ├── index.css                Tailwind directives + shared button/table styles
 │
 ├── api/
@@ -148,6 +150,7 @@ src/
 
 tests/
 ├── auth.smoke.jsx           22 checks for the login/signup page
+├── reset.smoke.jsx           9 checks for the forgot-password page
 └── finops.smoke.jsx         38 checks: landing, dashboard data boundaries, mock integrity
 ```
 
@@ -183,7 +186,14 @@ of inventing numbers.
 `/api/auth/verify-email`; sign-in posts to `/api/auth/signin` and redirects to `/dashboard`. Access
 and refresh tokens are kept in `localStorage` under `cloudpulse.accessToken` / `cloudpulse.refreshToken`.
 If the backend has no SMTP configured, the verification code is returned as `devCode` and shown on
-screen so the flow is testable locally. See `../backend/README.md` for the API and database setup.
+screen so the flow is testable locally.
+
+**Password reset is live.** `/forgot-password` posts the address to `/api/auth/forgot-password`, then
+takes the emailed code plus a new password via `/api/auth/reset-password`. The reset step sends the
+**email**, not a user id, because the request response must be identical for registered and unknown
+addresses — handing back an id would reveal which accounts exist. On success every refresh token for
+that user is revoked server-side, so sessions on other devices stop working and the user signs in
+again. See `../backend/README.md` for the API and database setup.
 
 ---
 

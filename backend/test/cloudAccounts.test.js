@@ -12,6 +12,10 @@ process.env.JWT_REFRESH_SECRET ??= 'test-only-refresh-secret-not-for-production-
 process.env.DATABASE_URL ??= 'postgresql://postgres:finops_dev_pw@localhost:5432/finops_test_cloud'
 process.env.ENCRYPTION_KEY ??= Buffer.alloc(32, 7).toString('base64')
 process.env.BCRYPT_ROUNDS = '4'
+// Without this the suite inherits the real SMTP host from backend/.env, which
+// suppresses the devCode these tests use to verify an address and would send
+// real mail to fake addresses.
+process.env.SMTP_HOST ??= ''
 
 const { pool } = await import('../src/db.js')
 const { createApp } = await import('../src/app.js')
