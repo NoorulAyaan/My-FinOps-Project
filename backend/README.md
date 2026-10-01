@@ -1,7 +1,8 @@
 # CloudPulse Backend
 
-Auth API for [CloudPulse FinOps](../FinOps-Project). This first slice covers **sign up and sign in
-only** — there is no billing, resource or dashboard data yet.
+Auth API for [CloudPulse FinOps](../frontend), the React frontend in the sibling `frontend/`
+directory. This slice covers **sign up, email verification, sign in and cloud-account storage** —
+there is no billing or resource data yet.
 
 Express 4 + node-postgres + JWT + bcrypt. ESM, matching the frontend's `"type": "module"`.
 
@@ -336,12 +337,12 @@ test/cloudAccounts.test.js cloud account CRUD and encryption tests
 
 ## Frontend integration
 
-`FinOps-Project` already talks to this API. `src/api/client.js` holds the token
+`frontend/` already talks to this API. `frontend/src/api/client.js` holds the token
 storage and refresh logic, and Vite proxies `/api` to port 4000 so the browser sees
 one origin:
 
 ```js
-// FinOps-Project/vite.config.js
+// frontend/vite.config.js
 server: {
   port: 5173,
   open: true,

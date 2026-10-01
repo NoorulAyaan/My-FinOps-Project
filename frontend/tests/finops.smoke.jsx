@@ -11,7 +11,7 @@ import Landing from '../src/pages/Landing.jsx'
 import Dashboard from '../src/pages/Dashboard.jsx'
 import Auth from '../src/pages/Auth.jsx'
 import { AuthProvider } from '../src/auth/AuthContext.jsx'
-import { providers, resources, services, opportunities, budgets, kpis, totalMtd, totalResources } from '../src/data/finops'
+import { providers, resources, services, opportunities, budgets, kpis, totalMtd, totalResources } from '../src/data/finops.js'
 
 // Dashboard and the auth forms read session state, so mirror App.jsx and
 // wrap the tree in AuthProvider.

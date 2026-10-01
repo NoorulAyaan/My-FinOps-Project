@@ -1,10 +1,11 @@
-# CloudPulse FinOps
+# CloudPulse FinOps — Frontend
 
-A multi-cloud **FinOps (Financial Operations)** web application. It gives you one place to see
-what your cloud costs, what resources you own, and where the money is being wasted — across
-**AWS, Azure and Google Cloud**.
+The React frontend for **My-FinOps-Project**, a multi-cloud FinOps (Financial Operations) app that
+gives you one place to see what your cloud costs, what resources you own, and where the money is
+being wasted — across **AWS, Azure and Google Cloud**.
 
-Built with **React 18 + Vite 6 + Tailwind CSS 3**.
+Built with **React 18 + Vite 6 + Tailwind CSS 3**. The API lives in the sibling `backend/`
+directory (Express + Postgres).
 
 ---
 
@@ -21,6 +22,7 @@ Built with **React 18 + Vite 6 + Tailwind CSS 3**.
   monthly saving, confidence and effort, with an accept/undo flow.
 - **Anomaly detection** — spend spikes correlated back to the exact line items and resources
   that caused them.
+- **Auth** — email-verified sign-up, sign-in, and cloud-account connection, all served by `backend/`.
 
 ---
 
@@ -44,12 +46,15 @@ it. It comes with `npm` bundled — you don't need to install npm separately.
 
 ### 1. Get the code
 
+This is the frontend half of [My-FinOps-Project](https://github.com/NoorulAyaan/My-FinOps-Project). Clone the whole repo, then work inside `frontend/`:
+
 ```bash
-git clone https://github.com/sayamuddinshams/FinOps-Project.git
-cd FinOps-Project
+git clone https://github.com/NoorulAyaan/My-FinOps-Project.git
+cd My-FinOps-Project/frontend
 ```
 
-If you were sent a zip file instead, just unzip it and `cd` into the folder.
+The backend lives in the sibling `backend/` directory. Run it on port 4000 — this app proxies
+`/api` there (see [Running it on your laptop](#running-it-on-your-laptop)).
 
 ### 2. Install the dependencies
 
@@ -227,5 +232,5 @@ otherwise a hard refresh on `/dashboard` or `/login` returns a 404.
   ```json
   { "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }] }
   ```
-- **GitHub Pages** — also set `base: '/FinOps-Project'` in `vite.config.js`, since Pages serves
+- **GitHub Pages** — also set `base: '/My-FinOps-Project'` in `vite.config.js`, since Pages serves
   from a subpath.

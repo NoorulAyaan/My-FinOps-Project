@@ -6,6 +6,9 @@ dist/
 dist-ssr/
 coverage/
 
+# Vite dep cache
+.vite/
+
 # Secrets — never commit real credentials
 .env
 .env.*
