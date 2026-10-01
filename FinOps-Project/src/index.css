@@ -1,0 +1,107 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    scroll-padding-top: 5rem; /* clears the fixed 4rem header */
+  }
+
+  html,
+  body {
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    overscroll-behavior: none;
+    background-color: #0f131d;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: #0a0e18;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #262a35;
+    border-radius: 9999px;
+    border: 2px solid #0a0e18;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #313540;
+  }
+}
+
+@layer components {
+  /* Primary CTA — Electric Cyan fill with bloom on hover */
+  .btn-primary {
+    @apply relative inline-flex items-center justify-center gap-space-xs rounded-lg bg-primary-container font-title-md text-title-md font-semibold text-on-primary transition-all;
+    padding: 0.75rem 2rem;
+    box-shadow: 0 0 24px rgba(0, 240, 255, 0.45);
+  }
+
+  .btn-primary:hover {
+    box-shadow: 0 0 36px rgba(0, 240, 255, 0.7);
+  }
+
+  /* Secondary — translucent glass */
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-space-xs rounded-lg bg-surface-container-high font-title-md text-title-md text-on-surface transition-all;
+    padding: 0.75rem 1.25rem;
+  }
+
+  .btn-secondary:hover {
+    @apply bg-surface-bright;
+  }
+
+  /* Auth form submit — full-width cyan CTA */
+  .btn-auth-primary {
+    @apply flex w-full items-center justify-center gap-2 rounded-lg bg-primary-container px-space-md py-3 font-headline-sm text-headline-sm text-on-primary shadow-md transition duration-150 hover:bg-surface-tint active:scale-[0.99];
+  }
+
+  /* Status pill */
+  .chip {
+    @apply inline-flex items-center rounded-full px-space-xs font-label-caps text-label-caps uppercase tracking-wider;
+    height: 22px;
+  }
+
+  .shell {
+    @apply mx-auto w-full max-w-7xl;
+  }
+
+  .gutter-x {
+    @apply px-margin;
+  }
+
+  /* Data table headers — sticky, per the design system's data-table spec */
+  .data-grid {
+    @apply font-body-md text-body-md;
+  }
+}
+
+/* Monospace numerals for live-updating telemetry scalars */
+.tnum {
+  font-feature-settings: 'tnum' on, 'zero' on;
+  font-variant-numeric: tabular-nums slashed-zero;
+}
+
+@media (max-width: 1023px) {
+  .gutter-x {
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+}
+
+@media (max-width: 767px) {
+  .gutter-x {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+}
