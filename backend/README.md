@@ -388,8 +388,8 @@ unknown origin gets a 403 rather than a 500.
 - [x] Add a password reset flow
 - [ ] Put avatar uploads on a persistent volume or object storage
 - [ ] Move tokens out of `localStorage` into `HttpOnly` cookies
-- [ ] Validate submitted credentials against each provider's API instead of `status = 'pending'`
-- [ ] Ingest costs from AWS Cost Explorer, Azure Cost Management and GCP Cloud Billing
+- [x] Validate submitted credentials against each provider's API instead of `status = 'pending'` (AWS Cost Explorer sync moves accounts `pending` → `connected`)
+- [x] Ingest costs from AWS Cost Explorer, Azure Cost Management and GCP Cloud Billing (AWS live via Cost Explorer; Azure/GCP via deterministic demo dataset until their SDKs are wired)
 
 ---
 

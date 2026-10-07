@@ -2,10 +2,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { api } from '@/api/client'
 
 /**
- * Loads the signed-in user's cloud connections. Cost figures are not fetched
- * yet — there is no cost puller in this stage, so `accounts` is the only real
- * data the dashboard has and every panel stays in its empty state until one
- * exists.
+ * Loads the signed-in user's cloud connections and exposes syncAccount, which
+ * triggers a cost ingestion run for one account and returns its updated state.
  */
 export function useCloudAccounts() {
   const [accounts, setAccounts] = useState([])
@@ -40,5 +38,11 @@ export function useCloudAccounts() {
     setAccounts((list) => list.filter((a) => a.id !== id))
   }, [])
 
-  return { accounts, loading, error, reload, addAccount, removeAccount }
+  const syncAccount = useCallback(async (id) => {
+    const { account } = await api.syncCloudAccount(id)
+    setAccounts((list) => list.map((a) => (a.id === id ? account : a)))
+    return account
+  }, [])
+
+  return { accounts, loading, error, reload, addAccount, removeAccount, syncAccount }
 }

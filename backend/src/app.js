@@ -8,6 +8,8 @@ import { errorHandler, notFound } from './middleware/errorHandler.js'
 import authRoutes from './routes/auth.js'
 import accountRoutes from './routes/account.js'
 import cloudAccountRoutes from './routes/cloudAccounts.js'
+import costRoutes from './routes/costs.js'
+import resourceRoutes from './routes/resources.js'
 import { databaseStatus, renderStatusPage } from './statusPage.js'
 
 export function createApp() {
@@ -69,6 +71,12 @@ export function createApp() {
     ['GET', '/api/account/sessions', 'list active sessions'],
     ['DELETE', '/api/account/sessions/:id', 'revoke one session'],
     ['POST', '/api/account/sessions/revoke-others', 'sign out other devices'],
+    ['GET', '/api/cloud-accounts', 'list cloud connections'],
+    ['POST', '/api/cloud-accounts', 'connect a cloud account'],
+    ['POST', '/api/cloud-accounts/:id/sync', 'run a cost ingestion'],
+    ['GET', '/api/costs/overview', 'cost overview for the dashboard'],
+    ['GET', '/api/costs/export', 'download the billing report as CSV'],
+    ['GET', '/api/resources', 'live AWS resource inventory'],
     ['GET', '/health', 'JSON status'],
   ]
 
@@ -142,6 +150,8 @@ export function createApp() {
   app.use('/api/auth', authRoutes)
   app.use('/api/account', accountRoutes)
   app.use('/api/cloud-accounts', cloudAccountRoutes)
+  app.use('/api/costs', costRoutes)
+  app.use('/api/resources', resourceRoutes)
 
   app.use(notFound)
   app.use(errorHandler)

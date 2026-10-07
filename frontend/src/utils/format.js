@@ -1,10 +1,13 @@
-export const usd = (n, opts = {}) =>
-  new Intl.NumberFormat('en-US', {
+export const usd = (n, opts = {}) => {
+  const dp = opts.dp ?? 0
+  return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
-    maximumFractionDigits: opts.dp ?? 0,
+    minimumFractionDigits: dp,
+    maximumFractionDigits: dp,
     notation: opts.compact ? 'compact' : 'standard',
   }).format(n)
+}
 
 export const usdCompact = (n) =>
   new Intl.NumberFormat('en-US', {

@@ -8,13 +8,21 @@
     "node": ">=20"
   },
   "scripts": {
-    "dev": "node --watch src/server.js",
-    "start": "node src/server.js",
+    "dev": "UV_THREADPOOL_SIZE=16 node --watch src/server.js",
+    "start": "UV_THREADPOOL_SIZE=16 node src/server.js",
     "migrate": "node db/migrate.js",
     "mail:test": "node scripts/mail-test.js",
     "test": "node --test test/*.test.js"
   },
   "dependencies": {
+    "@aws-sdk/client-cost-explorer": "^3.700.0",
+    "@aws-sdk/client-ec2": "^3.1146.0",
+    "@aws-sdk/client-iam": "^3.1146.0",
+    "@aws-sdk/client-lambda": "^3.1146.0",
+    "@aws-sdk/client-rds": "^3.1146.0",
+    "@aws-sdk/client-resource-groups-tagging-api": "^3.1146.0",
+    "@aws-sdk/client-s3": "^3.1146.0",
+    "@aws-sdk/client-sts": "^3.1146.0",
     "bcrypt": "^6.0.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",

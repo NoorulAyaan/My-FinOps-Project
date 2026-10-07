@@ -38,10 +38,6 @@ export default function Header() {
         </nav>
 
         <div className="flex items-center gap-space-md">
-          <div className="hidden items-center gap-space-xs rounded-full bg-surface-container-high px-space-sm py-1 text-on-surface-variant md:flex">
-            <span className="h-2 w-2 animate-pulse rounded-full bg-status-ok" />
-            <span className="font-label-caps text-label-caps">3 clouds connected</span>
-          </div>
 
           {/* Signed in: show who is here instead of the auth pitch. */}
           {signedIn ? (

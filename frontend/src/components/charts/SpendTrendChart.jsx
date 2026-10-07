@@ -1,6 +1,8 @@
 /**
  * Stacked area chart of daily spend split by provider.
  * Pure SVG — no chart library, no runtime cost.
+ * Only providers that are actually connected are stacked and shown in the
+ * legend — an AWS-only account never sees Azure/GCP entries.
  */
 const COLORS = {
   aws: '#00f0ff',
@@ -10,7 +12,15 @@ const COLORS = {
 
 const LABELS = { aws: 'AWS', azure: 'Azure', gcp: 'GCP' }
 
-export default function SpendTrendChart({ data, peak, height = 190, showAxis = true }) {
+const ALL_KEYS = ['aws', 'azure', 'gcp']
+
+export default function SpendTrendChart({
+  data,
+  peak,
+  providers = ALL_KEYS,
+  height = 190,
+  showAxis = true,
+}) {
   const W = 720
   const H = height
   const padT = 10
@@ -21,8 +31,8 @@ export default function SpendTrendChart({ data, peak, height = 190, showAxis = t
   const x = (i) => (i / (n - 1)) * W
   const y = (v) => padT + plotH - (v / peak) * plotH
 
-  // Build a stacked path per provider, plus the running baseline.
-  const keys = ['aws', 'azure', 'gcp']
+  // Build a stacked path per connected provider, plus the running baseline.
+  const keys = ALL_KEYS.filter((k) => providers.includes(k))
   const baselines = new Array(n).fill(0)
   const areas = []
   const lines = []

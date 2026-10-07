@@ -281,7 +281,7 @@ export default function ConnectCloud() {
 }
 
 const inputClass = (error) =>
-  `w-full rounded-lg bg-surface-container-lowest px-3 py-2.5 text-body-md text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:ring-1 focus:ring-primary-container ${
+  `w-full rounded-lg bg-surface-container-lowest px-3 py-2.5 text-body-md text-black placeholder:text-black focus:outline-none focus:ring-1 focus:ring-primary-container ${
     error ? 'ring-1 ring-status-crit' : ''
   }`
 

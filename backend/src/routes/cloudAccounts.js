@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import * as cloud from '../cloud.service.js'
+import * as cost from '../cost.service.js'
 import { asyncHandler } from '../middleware/asyncHandler.js'
 import { requireAuth } from '../middleware/requireAuth.js'
 
@@ -36,6 +37,15 @@ router.get(
   '/:id',
   asyncHandler(async (req, res) => {
     res.json({ account: await cloud.getCloudAccount(req.user.sub, req.params.id) })
+  }),
+)
+
+// Triggers a cost ingestion run for one account and moves it pending ->
+// connected. Safe to call repeatedly — each run replaces the previous data.
+router.post(
+  '/:id/sync',
+  asyncHandler(async (req, res) => {
+    res.json(await cost.syncCloudAccount(req.user.sub, req.params.id))
   }),
 )
 

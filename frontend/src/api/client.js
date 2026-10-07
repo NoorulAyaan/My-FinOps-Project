@@ -92,6 +92,43 @@ async function send(path, { method = 'GET', body, form, auth = true, retry = tru
   return payload
 }
 
+/**
+ * Fetches a file endpoint with the same auth/refresh handling as send(),
+ * then saves the response to disk under the server-provided filename.
+ */
+async function download(path) {
+  const headers = {}
+  const accessToken = tokens.access()
+  if (accessToken) headers.authorization = `Bearer ${accessToken}`
+
+  let res = await fetch(path, { headers })
+  if (res.status === 401 && tokens.refresh()) {
+    if (await refreshSession()) {
+      res = await fetch(path, {
+        headers: { authorization: `Bearer ${tokens.access()}` },
+      })
+    }
+  }
+
+  if (!res.ok) {
+    const text = await res.text()
+    throw new ApiError(res.status, text ? JSON.parse(text) : null)
+  }
+
+  const disposition = res.headers.get('content-disposition') ?? ''
+  const filename =
+    disposition.match(/filename="([^"]+)"/)?.[1] ?? path.split('/').pop() ?? 'download'
+
+  const url = URL.createObjectURL(await res.blob())
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = filename
+  document.body.appendChild(anchor)
+  anchor.click()
+  anchor.remove()
+  URL.revokeObjectURL(url)
+}
+
 export const api = {
   signup: (input) => send('/api/auth/signup', { method: 'POST', body: input, auth: false }),
   signin: (input) => send('/api/auth/signin', { method: 'POST', body: input, auth: false }),
@@ -130,4 +167,8 @@ export const api = {
   listCloudAccounts: () => send('/api/cloud-accounts'),
   addCloudAccount: (input) => send('/api/cloud-accounts', { method: 'POST', body: input }),
   deleteCloudAccount: (id) => send(`/api/cloud-accounts/${id}`, { method: 'DELETE' }),
+  syncCloudAccount: (id) => send(`/api/cloud-accounts/${id}/sync`, { method: 'POST' }),
+  getCostOverview: () => send('/api/costs/overview'),
+  downloadCostReport: () => download('/api/costs/export'),
+  getResources: () => send('/api/resources'),
 }
