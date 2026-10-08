@@ -38,10 +38,15 @@ export function useCloudAccounts() {
     setAccounts((list) => list.filter((a) => a.id !== id))
   }, [])
 
-  const syncAccount = useCallback(async (id) => {
-    const { account } = await api.syncCloudAccount(id)
-    setAccounts((list) => list.map((a) => (a.id === id ? account : a)))
-    return account
+  // Returns the full sync payload ({ account, records, cached, error, ... })
+  // so callers can distinguish a fresh pull, a cooldown-served cached response
+  // and an ingestion failure — the API reports failures as 200 + { error }.
+  const syncAccount = useCallback(async (id, opts) => {
+    const payload = await api.syncCloudAccount(id, opts)
+    if (payload.account) {
+      setAccounts((list) => list.map((a) => (a.id === id ? payload.account : a)))
+    }
+    return payload
   }, [])
 
   return { accounts, loading, error, reload, addAccount, removeAccount, syncAccount }

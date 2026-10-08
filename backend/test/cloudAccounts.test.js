@@ -21,6 +21,7 @@ const { pool } = await import('../src/db.js')
 const { createApp } = await import('../src/app.js')
 const { decryptSecret, encryptSecret, safeEqual } = await import('../src/crypto.js')
 const { parseCloudAccount } = await import('../src/cloud.service.js')
+const { syncCloudAccount } = await import('../src/cost.service.js')
 
 const dbDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'db')
 
@@ -405,4 +406,217 @@ test('an invalid access token is rejected by the cloud routes', async () => {
 test('the status page lists the cloud account routes', async () => {
   const html = await (await fetch(`${base}/`)).text()
   assert.ok(html.includes('/api/auth/signin'))
+})
+
+// ------------------------------------------------------------- sync cooldown
+//
+// AWS bills $0.01 per Cost Explorer request, so every sync must be able to run
+// without reaching AWS. The service takes an injectable fetchRows and the route
+// takes force=1; together they cover the "viewing the dashboard costs nothing"
+// guarantee end to end.
+
+// An account that already synced (fresh last_synced_at) and holds one stored
+// cost row, so a skipped sync can be shown to leave both untouched.
+async function syncedAccount({ syncedAt = new Date(), secret } = {}) {
+  const session = await verifiedUser()
+  const created = await api('/api/cloud-accounts', { body: AWS_KEY, token: session.accessToken })
+  const id = created.body.account.id
+  await pool.query(`UPDATE cloud_accounts SET status = 'connected', last_synced_at = $2 WHERE id = $1`, [
+    id,
+    syncedAt,
+  ])
+  if (secret !== undefined) {
+    await pool.query(`UPDATE cloud_accounts SET access_key_secret = $2 WHERE id = $1`, [id, secret])
+  }
+  await pool.query(
+    `INSERT INTO cost_records (account_id, provider, service, category, date, amount, live)
+     VALUES ($1, 'aws', 'Amazon Elastic Compute Cloud - Compute', 'Compute', '2026-10-01', 1.5, true)`,
+    [id],
+  )
+  return { session, id }
+}
+
+const rowFor = (date = '2026-10-02') => [
+  { date, service: 'Amazon Elastic Compute Cloud - Compute', amount: 2.5 },
+]
+
+test('a sync inside the billing cooldown serves stored rows without calling AWS', async () => {
+  const { session, id } = await syncedAccount()
+  let calls = 0
+
+  const result = await syncCloudAccount(session.user.id, id, {
+    fetchRows: async () => {
+      calls++
+      return rowFor()
+    },
+  })
+
+  assert.equal(calls, 0, 'the paid Cost Explorer request must not happen')
+  assert.equal(result.cached, true)
+  assert.equal(result.records, 1, 'the stored rows are still reported')
+  assert.ok(result.message, 'the UI is told why nothing refreshed')
+  assert.equal(result.error, undefined)
+
+  const { rows } = await pool.query(
+    'SELECT status, last_synced_at FROM cloud_accounts WHERE id = $1',
+    [id],
+  )
+  assert.equal(rows[0].status, 'connected')
+  const cost = await pool.query(
+    'SELECT amount FROM cost_records WHERE account_id = $1',
+    [id],
+  )
+  assert.equal(Number(cost.rows[0].amount), 1.5, 'existing rows are left in place')
+})
+
+test('a skipped sync does not extend the cooldown', async () => {
+  const { session, id } = await syncedAccount()
+  const { rows: before } = await pool.query(
+    'SELECT last_synced_at FROM cloud_accounts WHERE id = $1',
+    [id],
+  )
+  await syncCloudAccount(session.user.id, id, { fetchRows: async () => rowFor() })
+  const { rows: after } = await pool.query(
+    'SELECT last_synced_at FROM cloud_accounts WHERE id = $1',
+    [id],
+  )
+  assert.equal(
+    new Date(after[0].last_synced_at).getTime(),
+    new Date(before[0].last_synced_at).getTime(),
+    'reading cached data must not push the next paid sync further out',
+  )
+})
+
+test('force bypasses the cooldown and pulls fresh rows', async () => {
+  const { session, id } = await syncedAccount()
+  let calls = 0
+
+  const result = await syncCloudAccount(session.user.id, id, {
+    force: true,
+    fetchRows: async () => {
+      calls++
+      return rowFor()
+    },
+  })
+
+  assert.equal(calls, 1)
+  assert.equal(result.cached, undefined)
+  assert.equal(result.live, true)
+  assert.equal(result.records, 1)
+  const cost = await pool.query('SELECT amount FROM cost_records WHERE account_id = $1', [id])
+  assert.equal(Number(cost.rows[0].amount), 2.5, 'the new pull replaced the stored rows')
+})
+
+test('an account whose last sync is outside the cooldown syncs without force', async () => {
+  const { session, id } = await syncedAccount({
+    syncedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+  })
+  let calls = 0
+  const result = await syncCloudAccount(session.user.id, id, {
+    cooldownMs: 60 * 60 * 1000,
+    fetchRows: async () => {
+      calls++
+      return rowFor()
+    },
+  })
+  assert.equal(calls, 1)
+  assert.equal(result.cached, undefined)
+  assert.equal(result.records, 1)
+})
+
+test('cooldownMs: 0 disables the cooldown entirely', async () => {
+  const { session, id } = await syncedAccount()
+  let calls = 0
+  await syncCloudAccount(session.user.id, id, {
+    cooldownMs: 0,
+    fetchRows: async () => {
+      calls++
+      return rowFor()
+    },
+  })
+  assert.equal(calls, 1)
+})
+
+test('an account that has never synced always gets its first pull', async () => {
+  const session = await verifiedUser()
+  const created = await api('/api/cloud-accounts', { body: AWS_KEY, token: session.accessToken })
+  let calls = 0
+  const result = await syncCloudAccount(session.user.id, created.body.account.id, {
+    fetchRows: async () => {
+      calls++
+      return rowFor()
+    },
+  })
+  assert.equal(calls, 1, 'a null last_synced_at is not inside any cooldown')
+  assert.equal(result.records, 1)
+  assert.equal(result.account.status, 'connected')
+})
+
+test('two concurrent syncs only pay for one Cost Explorer request', async () => {
+  const { session, id } = await syncedAccount({ syncedAt: null })
+  let calls = 0
+  const slowFetch = async () => {
+    calls++
+    await new Promise((resolve) => setTimeout(resolve, 80))
+    return rowFor()
+  }
+
+  const results = await Promise.all([
+    syncCloudAccount(session.user.id, id, { fetchRows: slowFetch }),
+    syncCloudAccount(session.user.id, id, { fetchRows: slowFetch }),
+  ])
+
+  assert.equal(calls, 1, 'the advisory-locked claim lets exactly one sync through')
+  assert.equal(results.filter((r) => r.cached).length, 1, 'the other is told it is cached')
+})
+
+test('a failed sync still starts its own cooldown', async () => {
+  const { session, id } = await syncedAccount({ syncedAt: null })
+
+  const failed = await syncCloudAccount(session.user.id, id, {
+    fetchRows: async () => {
+      throw new Error('credentials rejected')
+    },
+  })
+  assert.equal(failed.error, 'credentials rejected')
+
+  let calls = 0
+  const retry = await syncCloudAccount(session.user.id, id, {
+    fetchRows: async () => {
+      calls++
+      return rowFor()
+    },
+  })
+  assert.equal(calls, 0, 'a retry inside the cooldown must not re-bill the account')
+  assert.equal(retry.cached, true)
+})
+
+test('POST /:id/sync inside the cooldown returns cached rows and never reaches AWS', async () => {
+  // Corrupting the ciphertext proves the boundary: had the request passed the
+  // cooldown gate it would have hit the secret read (and then AWS) and failed.
+  const { session, id } = await syncedAccount({ secret: 'not-a-ciphertext' })
+  const res = await api(`/api/cloud-accounts/${id}/sync`, {
+    method: 'POST',
+    token: session.accessToken,
+  })
+  assert.equal(res.status, 200)
+  assert.equal(res.body.cached, true)
+  assert.equal(res.body.error, undefined)
+  assert.equal(res.body.records, 1)
+})
+
+test('POST /:id/sync?force=1 passes the cooldown gate', async () => {
+  const { session, id } = await syncedAccount({ secret: 'not-a-ciphertext' })
+  const res = await api(`/api/cloud-accounts/${id}/sync?force=1`, {
+    method: 'POST',
+    token: session.accessToken,
+  })
+  assert.equal(res.status, 200)
+  assert.equal(res.body.cached, undefined, 'force must not be answered from cache')
+  assert.match(res.body.error, /ciphertext/, 'force reached the provider-call path')
+})
+
+test('POST /:id/sync requires a session', async () => {
+  const { id } = await syncedAccount()
+  assert.equal((await api(`/api/cloud-accounts/${id}/sync`)).status, 401)
 })

@@ -14,7 +14,7 @@ import { useAuth } from '@/auth/AuthContext'
 import { api } from '@/api/client'
 import { useCloudAccounts } from '@/hooks/useCloudAccounts'
 import { useCostOverview } from '@/hooks/useCostOverview'
-import { usd, pct } from '@/utils/format'
+import { usd, pct, timeAgo } from '@/utils/format'
 
 const PROVIDER_META = {
   aws: { label: 'AWS', icon: 'cloud', tone: 'warn' },
@@ -41,6 +41,7 @@ export default function Dashboard() {
     useCostOverview()
   const [syncingIds, setSyncingIds] = useState(() => new Set())
   const [syncError, setSyncError] = useState('')
+  const [syncNotice, setSyncNotice] = useState('')
   const [downloading, setDownloading] = useState(false)
   const navigate = useNavigate()
 
@@ -58,14 +59,21 @@ export default function Dashboard() {
   }, [])
 
   const syncOne = useCallback(
-    async (id) => {
+    async (id, opts) => {
       setSyncingIds((s) => new Set(s).add(id))
       try {
-        const result = await syncAccount(id)
+        const result = await syncAccount(id, opts)
         // The API returns 200 with { error } for a failed ingestion (bad
         // credentials, provider unreachable) so the reason reaches the UI.
-        if (result?.error) setSyncError(result.error)
-        else setSyncError('')
+        if (result?.error) {
+          setSyncError(result.error)
+          setSyncNotice('')
+        } else {
+          setSyncError('')
+          // A sync inside the billing cooldown serves the stored rows without
+          // calling AWS — say so rather than implying data was just refreshed.
+          setSyncNotice(result?.cached ? (result.message ?? 'Served from the last sync.') : '')
+        }
       } catch (err) {
         setSyncError(err.message)
       } finally {
@@ -84,22 +92,19 @@ export default function Dashboard() {
   // already auto-synced so we never fire the same ingestion concurrently.
   const autoSyncedRef = useRef(new Set())
 
-  // Accounts start at 'pending' until their first ingestion run. Sync any
-  // that have never synced, and re-sync connected accounts whose last sync
-  // is older than 5 minutes, so the dashboard always reflects the latest
-  // ingestion run.
+  // AWS bills $0.01 per Cost Explorer request, so the dashboard never
+  // re-syncs an account on a timer. Only accounts that have never run an
+  // ingestion (status 'pending', no lastSyncedAt) get one automatically —
+  // every later refresh is a deliberate "Sync now" click. Viewing the
+  // dashboard itself only reads Postgres and is free.
   useEffect(() => {
     if (loading) return
-    const stale = accounts.filter(
-      (a) =>
-        (a.status === 'pending' ||
-          !a.lastSyncedAt ||
-          Date.now() - new Date(a.lastSyncedAt).getTime() > 5 * 60 * 1000) &&
-        !autoSyncedRef.current.has(a.id),
+    const neverSynced = accounts.filter(
+      (a) => !a.lastSyncedAt && !autoSyncedRef.current.has(a.id),
     )
-    if (!stale.length) return
-    stale.forEach((a) => autoSyncedRef.current.add(a.id))
-    Promise.all(stale.map((a) => syncOne(a.id))).finally(reloadOverview)
+    if (!neverSynced.length) return
+    neverSynced.forEach((a) => autoSyncedRef.current.add(a.id))
+    Promise.all(neverSynced.map((a) => syncOne(a.id))).finally(reloadOverview)
   }, [loading, accounts, syncOne, reloadOverview])
 
   // Keep the overview in step with the account list (syncs, removals).
@@ -223,6 +228,10 @@ export default function Dashboard() {
                   icon="cloud"
                   bodyClassName="p-0"
                 >
+                  <p className="border-b border-white/[0.04] px-space-lg py-2 font-body-sm text-body-sm text-on-surface-variant">
+                    Viewing this dashboard only reads stored data — it never calls AWS. Sync
+                    now pulls fresh billing from Cost Explorer ($0.01 per request).
+                  </p>
                   <ul className="divide-y divide-white/[0.04]">
                     {accounts.map((account) => {
                       const meta = PROVIDER_META[account.provider] ?? {
@@ -242,6 +251,10 @@ export default function Dashboard() {
                               {meta.label} · {account.accessKeyId}
                               {account.region ? ` · ${account.region}` : ''}
                               {account.accountRef ? ` · ${account.accountRef}` : ''}
+                              {' · '}
+                              {account.lastSyncedAt
+                                ? `synced ${timeAgo(account.lastSyncedAt)}`
+                                : 'not synced yet'}
                             </span>
                           </div>
                           <div className="flex items-center gap-space-sm">
@@ -250,10 +263,10 @@ export default function Dashboard() {
                             </StatusPill>
                             <button
                               type="button"
-                              onClick={() => syncOne(account.id)}
+                              onClick={() => syncOne(account.id, { force: true })}
                               disabled={syncing}
                               aria-label={`Sync ${account.label}`}
-                              title="Sync now"
+                              title="Sync now — pulls fresh data from AWS ($0.01 per Cost Explorer request)"
                               className="text-on-surface-variant transition-colors hover:text-primary-container disabled:opacity-50"
                             >
                               <MaterialSymbol
@@ -275,6 +288,13 @@ export default function Dashboard() {
                     })}
                   </ul>
                 </Panel>
+
+                {syncNotice && !syncError && !overviewError && (
+                  <p className="flex items-center gap-space-xs rounded-lg bg-status-info/10 px-space-md py-2 text-body-sm text-status-info">
+                    <MaterialSymbol name="info" className="text-body-sm" />
+                    {syncNotice}
+                  </p>
+                )}
 
                 {(syncError || overviewError) && (
                   <p
@@ -323,13 +343,86 @@ function EmptyState() {
   )
 }
 
-function Kpi({ label, value, foot, footTone = 'text-on-surface-variant' }) {
+function Kpi({ label, value, foot, footTone = 'text-on-surface-variant', note, noteTone = 'text-on-surface' }) {
   return (
     <div className="flex flex-col gap-1 rounded-xl bg-surface-container px-space-md py-space-sm">
       <span className="font-label-caps text-label-caps uppercase text-on-surface-variant">{label}</span>
       <span className="tnum font-headline-sm text-headline-sm font-bold text-on-surface">{value}</span>
       <span className={`font-body-sm text-body-sm ${footTone}`}>{foot}</span>
+      {note && (
+        <span className={`truncate font-body-sm text-body-sm ${noteTone}`} title={note}>
+          {note}
+        </span>
+      )}
     </div>
+  )
+}
+
+/** Tones used to colour the per-service share segments and their legend dots. */
+const SERVICE_TONES = ['cyan', 'indigo', 'sky', 'ok', 'warn', 'info']
+
+/** Static dot classes (Tailwind cannot see template-literal class names). */
+const SERVICE_TONE_DOT = {
+  cyan: 'bg-primary-container',
+  indigo: 'bg-secondary',
+  sky: 'bg-tertiary-fixed-dim',
+  ok: 'bg-status-ok',
+  warn: 'bg-status-warn',
+  info: 'bg-status-info',
+}
+
+/**
+ * Attribution strip: answers "which service produced my month-to-date spend?"
+ * directly under the KPI row, so the driver of the MTD figure is visible
+ * without scrolling to the full service table.
+ */
+export function CostAttribution({ mtdSpend, activeServices }) {
+  if (!mtdSpend || activeServices.length === 0) return null
+
+  const top = activeServices[0]
+
+  return (
+    <Panel
+      title="Where your month-to-date spend came from"
+      subtitle={`Your ${usd(mtdSpend, { dp: 2 })} so far — billed by ${activeServices.length} service${activeServices.length === 1 ? '' : 's'}`}
+      icon="payments"
+    >
+      <ShareBar
+        segments={activeServices.map((s, i) => ({
+          label: s.name,
+          value: s.mtd,
+          tone: SERVICE_TONES[i % SERVICE_TONES.length],
+        }))}
+        height="h-3"
+      />
+      <ul className="mt-space-md flex flex-col divide-y divide-white/[0.04]">
+        {activeServices.map((s, i) => (
+          <li key={s.id} className="flex items-center gap-space-md py-2.5">
+            <span
+              className={`h-2.5 w-2.5 flex-none rounded-full ${SERVICE_TONE_DOT[SERVICE_TONES[i % SERVICE_TONES.length]]}`}
+              aria-hidden="true"
+            />
+            <div className="flex min-w-0 flex-1 flex-col">
+              <span className="truncate font-title-md text-title-md text-on-surface">{s.name}</span>
+              <span className="font-label-caps text-label-caps uppercase text-on-surface-variant">
+                {s.category}
+              </span>
+            </div>
+            <span className="tnum font-title-md text-title-md text-on-surface">
+              {usd(s.mtd, { dp: 2 })}
+            </span>
+            <span className="tnum w-14 text-right font-label-caps text-label-caps text-on-surface-variant">
+              {s.share}%
+            </span>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-space-sm border-t border-white/[0.06] pt-space-sm font-body-sm text-body-sm text-on-surface-variant">
+        Top cost driver: <span className="text-on-surface">{top.name}</span> at{' '}
+        <span className="tnum text-on-surface">{usd(top.mtd, { dp: 2 })}</span> — that is where your
+        month-to-date bill comes from.
+      </p>
+    </Panel>
   )
 }
 
@@ -392,6 +485,12 @@ function CostPanels({ section, overview, loading }) {
           value={usd(mtdSpend, { dp: 2 })}
           foot={`${pct(deltaPct)} vs last month`}
           footTone={deltaPct > 0 ? 'text-status-crit' : 'text-status-ok'}
+          note={
+            activeServices.length > 0
+              ? `${activeServices[0].name} · ${usd(activeServices[0].mtd, { dp: 2 })}`
+              : 'No service has billed yet'
+          }
+          noteTone={activeServices.length > 0 ? 'text-status-ok' : 'text-on-surface-variant'}
         />
         <Kpi
           label="Last Month"
@@ -416,6 +515,8 @@ function CostPanels({ section, overview, loading }) {
           foot={budget ? `${budgetPct.toFixed(0)}% consumed` : 'No budget configured'}
         />
       </div>
+
+      <CostAttribution mtdSpend={mtdSpend} activeServices={activeServices} />
 
       <Panel
         title="Daily spend · last 30 days"

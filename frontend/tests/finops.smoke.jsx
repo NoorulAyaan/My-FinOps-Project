@@ -7,11 +7,20 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { createElement } from 'react'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import Landing from '../src/pages/Landing.jsx'
-import Dashboard from '../src/pages/Dashboard.jsx'
+import Dashboard, { CostAttribution } from '../src/pages/Dashboard.jsx'
 import Auth from '../src/pages/Auth.jsx'
 import { AuthProvider } from '../src/auth/AuthContext.jsx'
 import { providers, resources, services, opportunities, budgets, kpis, totalMtd, totalResources } from '../src/data/finops.js'
+import { timeAgo } from '../src/utils/format.js'
+
+// Bundled to CJS, so import.meta.url is unavailable; resolve from the package root.
+const read = (rel) => readFileSync(resolve(process.cwd(), 'tests', rel), 'utf8')
+const dashSrc = read('../src/pages/Dashboard.jsx')
+const clientSrc = read('../src/api/client.js')
+const hookSrc = read('../src/hooks/useCloudAccounts.js')
 
 // Dashboard and the auth forms read session state, so mirror App.jsx and
 // wrap the tree in AuthProvider.
@@ -95,7 +104,57 @@ const authChecks = [
   ['auth: still renders sign up', has(renderAt(createElement(Auth, { initialMode: 'signup' }), '/signup'), 'Start Your Free Cloud Observability Trial')],
 ]
 
-const checks = [...landingChecks, ...dashChecks, ...authChecks, ...dataChecks]
+// Cost attribution must name the service behind the MTD figure, mirroring the
+// live payload shape (services sorted by MTD desc, only billing ones shown).
+const attributionHtml = renderAt(
+  createElement(CostAttribution, {
+    mtdSpend: 0.45,
+    activeServices: [
+      { id: 'aws-cost-explorer', name: 'AWS Cost Explorer', mtd: 0.45, share: 100, category: 'Other' },
+    ],
+  }),
+  '/dashboard',
+)
+
+const attributionEmptyHtml = renderAt(
+  createElement(CostAttribution, { mtdSpend: 0, activeServices: [] }),
+  '/dashboard',
+)
+
+const attributionChecks = [
+  ['attribution: names the billing service', attributionHtml.includes('AWS Cost Explorer')],
+  ['attribution: states the MTD amount', attributionHtml.includes('$0.45')],
+  ['attribution: labels it as top cost driver', has(attributionHtml, 'Top cost driver')],
+  ['attribution: shows share of spend', attributionHtml.includes('100%')],
+  ['attribution: renders nothing with zero spend', attributionEmptyHtml.length === 0],
+]
+
+// AWS charges $0.01 per Cost Explorer request. Viewing the dashboard must
+// never trigger a paid sync: the auto-sync rule is "never synced" only, every
+// later refresh is a deliberate forced click, and the UI says so.
+const syncChecks = [
+  ['sync: no 5-minute auto re-sync timer', !dashSrc.includes('5 * 60 * 1000')],
+  ['sync: auto-sync only targets never-synced accounts', dashSrc.includes('!a.lastSyncedAt')],
+  ['sync: manual refresh forces a paid pull', dashSrc.includes('syncOne(account.id, { force: true })')],
+  ['sync: client sends force=1 for a forced pull', clientSrc.includes('force=1')],
+  ['sync: hook forwards sync options to the API', hookSrc.includes('syncAccount = useCallback(async (id, opts)')],
+  ['sync: hook returns the full payload (error/cached reach the UI)', hookSrc.includes('return payload')],
+  ['sync: dashboard explains viewing is free', dashSrc.includes('never calls AWS')],
+  ['sync: dashboard prices the manual pull', dashSrc.includes('$0.01 per request')],
+  ['sync: account rows show when data was last synced', dashSrc.includes('synced ${timeAgo(account.lastSyncedAt)}')],
+  ['sync: cached responses surface a notice', dashSrc.includes('result?.cached')],
+]
+
+// Freshness can be shown from the stored timestamp without paying AWS again.
+const timeAgoChecks = [
+  ['timeAgo: null is never synced', timeAgo(null) === 'never'],
+  ['timeAgo: seconds read as just now', timeAgo(new Date(Date.now() - 5000).toISOString()) === 'just now'],
+  ['timeAgo: minutes', timeAgo(new Date(Date.now() - 3 * 60000).toISOString()) === '3m ago'],
+  ['timeAgo: hours', timeAgo(new Date(Date.now() - 5 * 3600000).toISOString()) === '5h ago'],
+  ['timeAgo: days', timeAgo(new Date(Date.now() - 2 * 86400000).toISOString()) === '2d ago'],
+]
+
+const checks = [...landingChecks, ...dashChecks, ...authChecks, ...attributionChecks, ...syncChecks, ...timeAgoChecks, ...dataChecks]
 
 let failed = 0
 for (const [name, ok] of checks) {

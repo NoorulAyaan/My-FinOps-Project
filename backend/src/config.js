@@ -19,6 +19,11 @@ function int(value, fallback) {
   return Number.isFinite(n) ? n : fallback
 }
 
+function float(value, fallback) {
+  const n = Number.parseFloat(value ?? '')
+  return Number.isFinite(n) && n >= 0 ? n : fallback
+}
+
 const WEAK_SECRETS = new Set([
   'change-me',
   'changeme',
@@ -107,6 +112,13 @@ export const config = {
   encryption: {
     // base64 of exactly 32 bytes; wraps every stored cloud access key.
     key: process.env.ENCRYPTION_KEY,
+  },
+  costSync: {
+    // AWS charges $0.01 for every Cost Explorer API request, and its data
+    // only refreshes about once a day. A non-forced sync inside this window
+    // serves the stored rows instead of paying for another request;
+    // force=1 (the manual "Sync now" button) bypasses it.
+    minIntervalMs: float(process.env.SYNC_MIN_INTERVAL_HOURS, 24) * 3_600_000,
   },
   uploads: {
     // Avatars live on disk under UPLOAD_DIR; at deploy this points at a volume

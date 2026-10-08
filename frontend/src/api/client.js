@@ -167,7 +167,10 @@ export const api = {
   listCloudAccounts: () => send('/api/cloud-accounts'),
   addCloudAccount: (input) => send('/api/cloud-accounts', { method: 'POST', body: input }),
   deleteCloudAccount: (id) => send(`/api/cloud-accounts/${id}`, { method: 'DELETE' }),
-  syncCloudAccount: (id) => send(`/api/cloud-accounts/${id}/sync`, { method: 'POST' }),
+  syncCloudAccount: (id, { force = false } = {}) =>
+    // force=1 pulls fresh data from AWS Cost Explorer; without it a sync inside
+    // the billing cooldown serves the stored rows (AWS charges $0.01/request).
+    send(`/api/cloud-accounts/${id}/sync${force ? '?force=1' : ''}`, { method: 'POST' }),
   getCostOverview: () => send('/api/costs/overview'),
   downloadCostReport: () => download('/api/costs/export'),
   getResources: () => send('/api/resources'),

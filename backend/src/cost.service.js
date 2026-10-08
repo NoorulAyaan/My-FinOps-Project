@@ -1,4 +1,5 @@
 import { query, withTransaction } from './db.js'
+import { config } from './config.js'
 import { getCloudAccount, listCloudAccounts, readSecretForProvider } from './cloud.service.js'
 
 // 60 days are ingested so the overview can compare the current month-to-date
@@ -106,15 +107,57 @@ async function writeRowsAndMark(accountId, status, rows) {
 }
 
 /**
+ * Decides whether this sync may spend money on AWS, and claims the slot if so.
+ * AWS bills $0.01 for every Cost Explorer request and its data only refreshes
+ * about once a day, so a sync inside the cooldown window is served from the
+ * stored rows instead — unless force is set (the manual "Sync now" button).
+ *
+ * The check runs under the same advisory lock as the writer, so two concurrent
+ * syncs cannot both start a paid request: the second waits, then sees the
+ * timestamp the first just claimed and backs off. The timestamp is claimed
+ * *before* the fetch, so a failed sync starts its own cooldown too — a request
+ * that errors out is billed just the same.
+ */
+async function claimSyncSlot(accountId, { force, cooldownMs }) {
+  let allowed = false
+  await withTransaction(async (client) => {
+    await client.query('SELECT pg_advisory_xact_lock(815, $1::int)', [accountId])
+    const { rows } = await client.query(
+      'SELECT last_synced_at FROM cloud_accounts WHERE id = $1',
+      [accountId],
+    )
+    const last = rows[0]?.last_synced_at
+    const fresh =
+      cooldownMs > 0 && last != null && Date.now() - new Date(last).getTime() < cooldownMs
+    if (force || !fresh) {
+      await client.query('UPDATE cloud_accounts SET last_synced_at = now() WHERE id = $1', [
+        accountId,
+      ])
+      allowed = true
+    }
+  })
+  return allowed
+}
+
+/**
  * Ingests the last 60 days of cost for one account from the provider's own
  * API using the stored credentials. There is no synthetic fallback: whatever
  * AWS reports — including $0.00 — is what gets stored and displayed.
  *
+ * A sync inside the cooldown window (config.costSync.minIntervalMs) skips the
+ * paid Cost Explorer call entirely and returns the stored rows marked
+ * `cached: true`; force: true always pulls fresh data.
+ *
  * Success  -> status 'connected', real rows written.
  * Failure  -> status 'error', previous rows cleared, the reason returned to
  *             the caller so the UI can show it.
+ * Cached   -> status and rows untouched, no AWS call made, no money spent.
  */
-export async function syncCloudAccount(userId, id) {
+export async function syncCloudAccount(
+  userId,
+  id,
+  { force = false, cooldownMs = config.costSync.minIntervalMs, fetchRows = fetchAwsCostRows } = {},
+) {
   const account = await getCloudAccount(userId, id)
 
   if (account.provider !== 'aws') {
@@ -123,10 +166,25 @@ export async function syncCloudAccount(userId, id) {
     return { account: await getCloudAccount(userId, id), live: false, records: 0, error: message }
   }
 
+  if (!(await claimSyncSlot(account.id, { force, cooldownMs }))) {
+    const { rows } = await query(
+      `SELECT count(*)::int AS n FROM cost_records WHERE account_id = $1`,
+      [account.id],
+    )
+    return {
+      account: await getCloudAccount(userId, id),
+      live: true,
+      records: rows[0].n,
+      cached: true,
+      message:
+        'Synced inside the billing cooldown — showing the stored rows. AWS charges $0.01 per Cost Explorer request, so press Sync now to pull fresh data.',
+    }
+  }
+
   let rows
   try {
     const secret = await readSecretForProvider(userId, id)
-    rows = await fetchAwsCostRows(account, secret)
+    rows = await fetchRows(account, secret)
   } catch (err) {
     console.warn(`[cost] live AWS sync failed for account ${id}: ${err.message}`)
     await writeRowsAndMark(account.id, 'error', [])

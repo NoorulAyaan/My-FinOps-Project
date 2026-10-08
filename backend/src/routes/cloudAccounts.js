@@ -42,10 +42,16 @@ router.get(
 
 // Triggers a cost ingestion run for one account and moves it pending ->
 // connected. Safe to call repeatedly — each run replaces the previous data.
+//
+// AWS charges $0.01 per Cost Explorer request, so a repeat sync inside the
+// billing cooldown serves the stored rows instead of calling AWS (response
+// carries cached: true). Pass force (?force=1 or { force: true }) to pull
+// fresh data anyway — that is what the manual "Sync now" button does.
 router.post(
   '/:id/sync',
   asyncHandler(async (req, res) => {
-    res.json(await cost.syncCloudAccount(req.user.sub, req.params.id))
+    const force = req.query.force === '1' || req.body?.force === true
+    res.json(await cost.syncCloudAccount(req.user.sub, req.params.id, { force }))
   }),
 )
 
